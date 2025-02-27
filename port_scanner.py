@@ -8,11 +8,17 @@ def scan_port(target, port):
     sock.close()
     return result == 0  # Retorna True se a porta estiver aberta
 
+def scan_ports(target, ports):
+    """Escaneia múltiplas portas no alvo fornecido."""
+    for port in ports:
+        if scan_port(target, port):
+            print(f"[+] Porta {port} aberta em {target} ✅")
+        else:
+            print(f"[-] Porta {port} fechada em {target} ❌")
+
 if __name__ == "__main__":
     target = input("Digite o IP ou domínio para escanear: ")
-    port = int(input("Digite a porta que deseja verificar: "))
+    ports = input("Digite as portas que deseja verificar (separadas por vírgula): ")
+    ports = [int(port.strip()) for port in ports.split(",")]
 
-    if scan_port(target, port):
-        print(f"[+] Porta {port} aberta em {target} ✅")
-    else:
-        print(f"[-] Porta {port} fechada em {target} ❌")
+    scan_ports(target, ports)
