@@ -4,8 +4,6 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 from src.port_scanner import scan_port
 
-
-
 class TestScanner(unittest.TestCase):
     def test_scan_port_open(self):
         # Testa se a porta 443 está aberta (exemplo)

@@ -1,6 +1,10 @@
 import socket
+import ssl
+import dns.resolver
 import threading
 import logging
+from tqdm import tqdm
+import csv
 
 # Função para configurar o logging
 def configure_logging(log_level):
@@ -47,6 +51,7 @@ def get_user_config():
     
     return timeout, max_threads
 
+# Função para escanear uma porta
 def scan_port(target, port, timeout):
     """Tenta se conectar a uma porta do alvo para verificar se está aberta."""
     try:
@@ -62,33 +67,92 @@ def scan_port(target, port, timeout):
         logging.error(f"Erro ao tentar conectar à porta {port} do alvo {target}: {e}")
         return False
 
-def scan_ports(target, ports, timeout, max_threads):
-    """Escaneia múltiplas portas no alvo fornecido usando threads."""
+# Função para escanear múltiplas portas
+def scan_ports_with_progress(target, ports, timeout, max_threads):
+    """Escaneia múltiplas portas no alvo fornecido usando threads e barra de progresso."""
     threads = []
-    for port in ports:
+    results = {}
+    for port in tqdm(ports, desc="Escaneando portas", unit="porta"):
         # Limita o número de threads
         if len(threads) >= max_threads:
             for thread in threads:
                 thread.join()  # Aguarda as threads anteriores terminarem antes de iniciar novas
             threads = []  # Reseta a lista de threads
 
-        thread = threading.Thread(target=check_port, args=(target, port, timeout))
+        thread = threading.Thread(target=check_port, args=(target, port, timeout, results))
         threads.append(thread)
         thread.start()
     
     for thread in threads:
         thread.join()
 
-def check_port(target, port, timeout):
+    # Após o escaneamento, exporta os resultados para CSV
+    export_results_to_csv(results)
+
+# Função para verificar o status de uma porta
+def check_port(target, port, timeout, results):
     """Verifica o estado de uma porta e imprime o resultado, além de registrar o log."""
     if scan_port(target, port, timeout):
         message = f"[+] Porta {port} aberta em {target} ✅"
-        print(message)
-        logging.info(message)
+        results[port] = "Aberta"
+        # Chama a função grab_banner para capturar o banner da porta aberta
+        banner = grab_banner(target, port)
+        print(f"Banner da Porta {port}: {banner}")
     else:
         message = f"[-] Porta {port} fechada em {target} ❌"
-        print(message)
-        logging.info(message)
+        results[port] = "Fechada"
+    print(message)
+    logging.info(message)
+
+# Função para exportar os resultados para CSV
+def export_results_to_csv(results):
+    """Exporta os resultados para um arquivo CSV."""
+    with open('scan_results.csv', mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Porta', 'Status'])  # Cabeçalho
+        for port, status in results.items():
+            writer.writerow([port, status])  # Escreve os resultados
+
+# Função para capturar banner DNS (porta 53)
+def grab_dns_banner(target):
+    """Captura informações DNS (consulta A)."""
+    try:
+        result = dns.resolver.resolve(target, 'A')  # Consulta DNS tipo 'A'
+        return ', '.join([str(ip.address) for ip in result])  # Retorna os endereços IPs encontrados
+    except dns.resolver.NoAnswer:
+        return "Nenhuma resposta encontrada"
+    except dns.resolver.NXDOMAIN:
+        return "Domínio não encontrado"
+    except Exception as e:
+        return f"Erro ao consultar DNS: {e}"
+
+# Função para capturar o banner de um serviço na porta especificada
+def grab_banner(target, port):
+    """Tenta capturar o banner de uma porta, usando SSL para HTTPS (porta 443)."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)  # Tempo limite de 2 segundos
+
+        # Usando SSL para conexões HTTPS (porta 443)
+        if port == 443:
+            context = ssl.create_default_context()
+            with context.wrap_socket(sock, server_hostname=target) as ssock:
+                ssock.connect((target, port))
+                banner = ssock.recv(1024).decode().strip()
+        else:
+            sock.connect((target, port))
+            sock.send(b'Hello\r\n')
+            banner = sock.recv(1024).decode().strip()
+
+        sock.close()
+
+        return banner if banner else "Banner vazio"
+    except socket.timeout:
+        return "Timeout: Não foi possível conectar ou obter resposta a tempo"
+    except socket.error as e:
+        return f"Erro de conexão: {e}"
+    except Exception as e:
+        return f"Erro inesperado: {e}"
 
 if __name__ == "__main__":
     try:
@@ -100,7 +164,7 @@ if __name__ == "__main__":
         ports = [int(port.strip()) for port in ports.split(",")]
 
         logging.info(f"Escaneando {target} nas portas: {ports}")
-        scan_ports(target, ports, timeout, max_threads)
+        scan_ports_with_progress(target, ports, timeout, max_threads)
     except ValueError:
         logging.error("[Erro] Entrada inválida. Certifique-se de fornecer números válidos para as portas.")
         print("[Erro] Entrada inválida. Certifique-se de fornecer números válidos para as portas.")
