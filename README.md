@@ -2,10 +2,4 @@
 
 Este é um simples scanner de portas em Python que permite verificar se uma porta está aberta ou fechada em um determinado alvo (IP ou domínio).
 
-## Como Usar
-
-1. Clone o repositório:
-   ```bash
-   git clone https://github.com/usuario/port-scanner.git
-   cd port-scanner
 
