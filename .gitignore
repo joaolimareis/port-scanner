@@ -2,7 +2,10 @@
 venv/
 
 # Ignorar arquivos de log
+# Ignorar arquivos sensíveis
+.env
 *.log
+*.csv
 
 # Ignorar arquivos de configuração do editor (como do VSCode ou PyCharm)
 .vscode/
